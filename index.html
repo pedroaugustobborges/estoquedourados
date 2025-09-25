@@ -71,18 +71,8 @@
             box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
         }
         
-        .threshold-control {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .threshold-control input[type="range"] {
-            width: 150px;
-        }
-
         .threshold-control select {
-            padding: 8px 12px;
+            padding: 12px;
             border: 2px solid #ddd;
             border-radius: 6px;
             background: white;
@@ -249,20 +239,6 @@
             font-family: 'Courier New', monospace;
         }
 
-        .related-products {
-            background: #fff3cd;
-            border-left: 4px solid #ffc107;
-            margin: 15px 0;
-            padding: 15px;
-            border-radius: 8px;
-        }
-
-        .related-products h4 {
-            color: #856404;
-            margin: 0 0 10px 0;
-            font-size: 1.1em;
-        }
-
         .pagination {
             display: flex;
             justify-content: center;
@@ -337,55 +313,29 @@
             padding: 40px;
             color: #6c757d;
         }
-        
-        .stats {
-            background: #e3f2fd;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-around;
-            text-align: center;
+
+        .low-similarity-warning {
+            background: #fff3cd;
+            border-left: 5px solid #ffc107;
+            margin: 0 20px 15px 20px;
+            padding: 15px;
+            border-radius: 0 8px 8px 0;
         }
-        
-        .stat-item h4 {
+        .low-similarity-warning h4 {
+            margin: 0 0 5px 0;
+            color: #856404;
+            font-size: 1.1em;
+        }
+        .low-similarity-warning p {
             margin: 0;
-            font-size: 1.5em;
-            color: #1976d2;
+            color: #856404;
+            font-size: 0.95em;
         }
-        
-        .stat-item p {
-            margin: 5px 0 0 0;
-            color: #666;
-            font-size: 0.9em;
-        }
-        
-        .tooltip {
-            position: relative;
-            display: inline-block;
-        }
-        
-        .tooltip .tooltiptext {
-            visibility: hidden;
-            width: 200px;
-            background-color: #333;
-            color: #fff;
+        .no-matches-found {
+            padding: 30px;
             text-align: center;
-            border-radius: 6px;
-            padding: 8px;
-            position: absolute;
-            z-index: 1;
-            bottom: 125%;
-            left: 50%;
-            margin-left: -100px;
-            opacity: 0;
-            transition: opacity 0.3s;
-            font-size: 0.8em;
-        }
-        
-        .tooltip:hover .tooltiptext {
-            visibility: visible;
-            opacity: 1;
+            background: #f8f9fa;
+            color: #6c757d;
         }
         
         @media (max-width: 768px) {
@@ -408,11 +358,6 @@
                 align-items: flex-start;
                 gap: 10px;
             }
-            
-            .stats {
-                flex-direction: column;
-                gap: 15px;
-            }
         }
     </style>
 </head>
@@ -428,13 +373,6 @@
                 <input type="text" id="searchInput" placeholder="🔍 Buscar produto no estoque..." />
             </div>
             
-            <div class="threshold-control tooltip">
-                <label>Similaridade mín.:</label>
-                <input type="range" id="thresholdSlider" min="10" max="95" value="60" />
-                <span id="thresholdValue">60%</span>
-                <span class="tooltiptext">Ajuste o nível mínimo de similaridade para as correspondências (60%+ mostra apenas matches relevantes)</span>
-            </div>
-
             <div class="threshold-control">
                 <label>Itens por página:</label>
                 <select id="itemsPerPageSelect" onchange="changeItemsPerPage()">
@@ -457,13 +395,14 @@
     </div>
 
     <script>
-        // Variáveis globais para paginação
+        // --- CONFIGURAÇÕES GLOBAIS ---
+        const HIGH_SIMILARITY_THRESHOLD = 60; // Define o que é uma "boa" correspondência
         let currentPage = 1;
         let itemsPerPage = 10;
-        let allMatchesData = [];
+        let allMatchesData = []; // Armazena os dados da busca atual para paginação
         let totalItems = 0;
 
-        // Função para normalizar texto
+        // Função para normalizar texto (remover acentos, pontuação e converter para minúsculas)
         function normalizeText(text) {
             if (!text) return '';
             return text.toString()
@@ -475,7 +414,7 @@
                 .trim();
         }
 
-        // Função para calcular similaridade
+        // Função para calcular a similaridade entre dois textos
         function calculateSimilarity(text1, text2) {
             const words1 = normalizeText(text1).split(' ').filter(w => w.length > 2);
             const words2 = normalizeText(text2).split(' ').filter(w => w.length > 2);
@@ -483,13 +422,11 @@
             if (words1.length === 0 || words2.length === 0) return 0;
             
             let commonWords = 0;
-            let totalWords = Math.max(words1.length, words2.length);
+            const totalWords = Math.max(words1.length, words2.length);
             
             for (const word1 of words1) {
                 for (const word2 of words2) {
-                    if (word1 === word2 || 
-                        (word1.length > 3 && word2.length > 3 && 
-                         (word1.includes(word2) || word2.includes(word1)))) {
+                    if (word1 === word2 || (word1.length > 3 && word2.length > 3 && (word1.includes(word2) || word2.includes(word1)))) {
                         commonWords++;
                         break;
                     }
@@ -499,149 +436,46 @@
             return (commonWords / totalWords) * 100;
         }
 
-        // Função super flexível para garantir matches para TODOS os produtos
-        function findMatches(stockProduct, inventoryProducts, threshold = 60) {
-            const matches = [];
-            const stockWords = normalizeText(stockProduct.produto).split(' ').filter(w => w.length > 1);
+        // Função para encontrar correspondências com lógica de bônus
+        function findMatches(stockProduct, inventoryProducts) {
+            const allCalculatedMatches = [];
             const stockText = normalizeText(stockProduct.produto);
 
-            // Palavras-chave de diferentes tamanhos para busca em camadas
-            const keyWords4Plus = stockWords.filter(word => word.length >= 4);
-            const keyWords3Plus = stockWords.filter(word => word.length >= 3);
-            const allWords = stockWords.filter(word => word.length >= 2);
-
             for (const invProduct of inventoryProducts) {
-                const invWords = normalizeText(invProduct.ds_produto).split(' ').filter(w => w.length > 1);
                 const invText = normalizeText(invProduct.ds_produto);
-
-                // Calcular similaridade básica
-                let similarity = calculateSimilarity(stockProduct.produto, invProduct.ds_produto);
-                let keywordMatches = 0;
-                let keywordBonus = 0;
-                let matchTypes = [];
-
-                // NÍVEL 1: Correspondências exatas de palavras
-                for (const stockWord of stockWords) {
-                    for (const invWord of invWords) {
-                        if (stockWord === invWord && stockWord.length > 2) {
-                            keywordBonus += 20; // Bonus alto para palavras exatas
-                            keywordMatches++;
-                            matchTypes.push('exact');
-                        }
+                let similarity = calculateSimilarity(stockText, invText);
+                let bonus = 0;
+                
+                // Bônus por palavras exatas
+                const stockWords = stockText.split(' ').filter(w => w.length > 2);
+                const invWords = invText.split(' ').filter(w => w.length > 2);
+                let commonCount = 0;
+                stockWords.forEach(sw => {
+                    if (invWords.includes(sw)) {
+                        bonus += 15;
+                        commonCount++;
                     }
-                }
+                });
 
-                // NÍVEL 2: Palavras contidas (uma palavra contém a outra)
-                for (const stockWord of keyWords3Plus) {
-                    for (const invWord of invWords) {
-                        if (stockWord !== invWord && stockWord.length > 2 && invWord.length > 2) {
-                            if (stockWord.includes(invWord) || invWord.includes(stockWord)) {
-                                keywordBonus += 12;
-                                keywordMatches++;
-                                matchTypes.push('contains');
-                            }
-                        }
-                    }
-                }
+                if (commonCount > 1) bonus += commonCount * 5;
 
-                // NÍVEL 3: Busca por palavras-chave no texto completo
-                for (const keyWord of keyWords4Plus) {
-                    if (invText.includes(keyWord)) {
-                        keywordBonus += 8;
-                        keywordMatches++;
-                        matchTypes.push('text_match');
-                    }
-                }
-
-                // NÍVEL 4: Busca por palavras menores (3+ caracteres)
-                if (keywordMatches === 0) {
-                    for (const keyWord of keyWords3Plus) {
-                        if (invText.includes(keyWord)) {
-                            keywordBonus += 5;
-                            keywordMatches++;
-                            matchTypes.push('partial');
-                        }
-                    }
-                }
-
-                // NÍVEL 5: FALLBACK - Busca por palavras muito pequenas ou números
-                if (keywordMatches === 0) {
-                    for (const word of allWords) {
-                        if (word.length >= 2 && invText.includes(word)) {
-                            keywordBonus += 3;
-                            keywordMatches++;
-                            matchTypes.push('fallback');
-                        }
-                    }
-                }
-
-                // NÍVEL 6: FALLBACK FINAL - Busca por categoria/tipo comum
-                if (keywordMatches === 0) {
-                    const commonTerms = ['material', 'medico', 'hospitalar', 'cirurgico', 'descartavel', 'esteril'];
-                    for (const term of commonTerms) {
-                        if (stockText.includes(term) && invText.includes(term)) {
-                            keywordBonus += 2;
-                            keywordMatches++;
-                            matchTypes.push('category');
-                            break; // Só um match de categoria
-                        }
-                    }
-                }
-
-                similarity += keywordBonus;
-                similarity = Math.min(similarity, 100);
-
-                // CRITÉRIO MAIS SELETIVO: Para threshold >= 60%, ser mais rigoroso
-                if (threshold >= 60) {
-                    // Para 60%+, aceitar apenas se a similaridade real for >= threshold OU tiver muitas palavras em comum
-                    if (similarity >= threshold || (keywordMatches >= 3 && similarity >= 40)) {
-                        matches.push({
-                            ...invProduct,
-                            similarity: Math.round(similarity * 10) / 10,
-                            keywordMatches,
-                            matchTypes: [...new Set(matchTypes)]
-                        });
-                    }
-                } else {
-                    // Para threshold < 60%, critério mais flexível (comportamento original)
-                    if (similarity >= Math.max(threshold, 5) || keywordMatches >= 1) {
-                        matches.push({
-                            ...invProduct,
-                            similarity: Math.max(Math.round(similarity * 10) / 10, 5),
-                            keywordMatches,
-                            matchTypes: [...new Set(matchTypes)]
-                        });
-                    }
-                }
-            }
-
-            // Se não encontrou NADA e threshold é baixo, forçar correspondência genérica
-            if (matches.length === 0 && threshold < 40 && inventoryProducts.length > 0) {
-                matches.push({
-                    ...inventoryProducts[0],
-                    similarity: 5,
-                    keywordMatches: 0,
-                    matchTypes: ['generic'],
-                    isForced: true
+                similarity += bonus;
+                
+                allCalculatedMatches.push({
+                    ...invProduct,
+                    similarity: Math.min(Math.round(similarity), 100)
                 });
             }
 
-            // Retornar todas as correspondências ordenadas por relevância
-            return matches.sort((a, b) => {
-                if (b.similarity !== a.similarity) {
-                    return b.similarity - a.similarity;
-                }
-                return b.keywordMatches - a.keywordMatches;
-            });
+            return allCalculatedMatches.sort((a, b) => b.similarity - a.similarity);
         }
 
-        // Função para copiar texto para área de transferência
+        // Função para copiar texto para a área de transferência
         async function copyToClipboard(text) {
             try {
                 await navigator.clipboard.writeText(text);
                 return true;
             } catch (err) {
-                // Fallback para navegadores mais antigos
                 const textArea = document.createElement('textarea');
                 textArea.value = text;
                 document.body.appendChild(textArea);
@@ -652,8 +486,8 @@
             }
         }
 
-        // Função para criar o HTML de uma correspondência (melhorada com visual e cópia fácil)
-        function createMatchHTML(stockProduct, matches) {
+        // Função para criar o HTML de uma correspondência
+        function createMatchHTML(stockProduct, matches, showWarning) {
             const matchItems = matches.map(match => {
                 let badgeClass = 'similarity-low';
                 if (match.similarity >= 60) badgeClass = 'similarity-high';
@@ -671,14 +505,13 @@
                             </div>
                         </div>
                         <div class="similarity-badge ${badgeClass}">${match.similarity}%</div>
-                        <button class="copy-btn" onclick="copyProductInfo(${match.cd_produto}, '${match.ds_produto.replace(/'/g, "\\'")}', '${match.unidade || 'N/A'}', '${match.ds_classe || 'N/A'}', '${match.ds_sub_cla || ''}')">
+                        <button class="copy-btn" onclick="copyProductInfo(event, ${match.cd_produto}, '${match.ds_produto.replace(/'/g, "\\'")}')">
                             📋 Copiar
                         </button>
                     </div>
                 `;
             }).join('');
-
-            // Criar string com todos os produtos para copiar tudo de uma vez
+            
             const allProductsString = matches.map(match =>
                 `${match.cd_produto}\t${match.ds_produto}\t${match.unidade}\t${match.ds_classe}\t${match.ds_sub_cla || ''}`
             ).join('\n');
@@ -689,40 +522,40 @@
                         <h3>${stockProduct.produto}</h3>
                         <div class="stock-info">
                             <span><strong>Código:</strong> <span class="product-code">${stockProduct.codigo}</span></span>
-                            <span><strong>Quantidade Atual:</strong> ${stockProduct.qtdeAtual || 'N/A'}</span>
-                            <span><strong>Correspondências Encontradas:</strong> ${matches.length}</span>
+                            <span><strong>Qtd:</strong> ${stockProduct.qtdeAtual || 'N/A'}</span>
                         </div>
-                        ${matches.length > 1 ? `
-                        <div class="related-products">
-                            <h4>💡 ${matches.length} opções relacionadas encontradas!</h4>
-                            <p>Clique em "Copiar Todas" para copiar todas as opções em formato de tabela.</p>
-                        </div>
-                        ` : ''}
                     </div>
+                    ${showWarning && matches.length > 0 ? `
+                    <div class="low-similarity-warning">
+                        <h4>⚠️ Aviso de Baixa Similaridade</h4>
+                        <p>Nenhuma correspondência com ${HIGH_SIMILARITY_THRESHOLD}%+ foi encontrada. Exibindo as ${matches.length} opções mais próximas.</p>
+                    </div>` : ''}
                     <div class="matches">
-                        ${matchItems}
+                        ${matches.length > 0 ? matchItems : `
+                        <div class="no-matches-found">
+                            <p>Nenhuma correspondência encontrada no inventário para este item.</p>
+                        </div>`}
+                        
                         ${matches.length > 1 ? `
-                        <button class="copy-all-btn" onclick="copyAllProducts('${allProductsString.replace(/'/g, "\\'")}', '${stockProduct.produto.replace(/'/g, "\\'")}')">
+                        <button class="copy-all-btn" onclick="copyAllProducts(event, '${allProductsString.replace(/'/g, "\\'")}', '${stockProduct.produto.replace(/'/g, "\\'")}')">
                             📋 Copiar Todas as ${matches.length} Opções
-                        </button>
-                        ` : ''}
+                        </button>` : ''}
                     </div>
                 </div>
             `;
         }
 
         // Função para copiar informações do produto individual
-        async function copyProductInfo(codigo, nome, unidade, classe, subclasse) {
-            const text = `${codigo}\t${nome}\t${unidade}\t${classe}\t${subclasse}`;
+        async function copyProductInfo(event, codigo, nome) {
+            event.stopPropagation();
+            const text = `${codigo}\t${nome}`;
             const success = await copyToClipboard(text);
 
             if (success) {
-                // Feedback visual
                 const btn = event.target.closest('.copy-btn');
                 const originalText = btn.innerHTML;
                 btn.innerHTML = '✅ Copiado!';
                 btn.style.background = '#28a745';
-
                 setTimeout(() => {
                     btn.innerHTML = originalText;
                     btn.style.background = '#17a2b8';
@@ -731,18 +564,17 @@
         }
 
         // Função para copiar todas as opções relacionadas
-        async function copyAllProducts(allProductsString, produtoOriginal) {
-            const header = `PRODUTO ORIGINAL: ${produtoOriginal}\n\nTODAS AS OPÇÕES RELACIONADAS:\nCódigo\tDescrição\tUnidade\tClasse\tSubclasse\n`;
+        async function copyAllProducts(event, allProductsString, produtoOriginal) {
+            event.stopPropagation();
+            const header = `PRODUTO ORIGINAL: ${produtoOriginal}\n\nCódigo\tDescrição\tUnidade\tClasse\tSubclasse\n`;
             const text = header + allProductsString;
             const success = await copyToClipboard(text);
-
+            
             if (success) {
-                // Feedback visual
                 const btn = event.target;
                 const originalText = btn.innerHTML;
                 btn.innerHTML = '✅ Todas Copiadas!';
                 btn.style.background = '#218838';
-
                 setTimeout(() => {
                     btn.innerHTML = originalText;
                     btn.style.background = '#28a745';
@@ -751,117 +583,61 @@
         }
 
         // Função para renderizar resultados com paginação
-        function renderResults(matches, totalStock, totalWithMatches) {
+        function renderResults(matchesData, totalStock, totalWithMatches) {
             const resultsDiv = document.getElementById('results');
 
-            if (matches.length === 0) {
-                const currentThreshold = parseInt(document.getElementById('thresholdSlider').value);
+            if (matchesData.length === 0) {
                 resultsDiv.innerHTML = `
                     <div class="no-results">
-                        <div style="font-size: 4em; margin-bottom: 20px;">🎯</div>
-                        <h3>Nenhum match de ${currentThreshold}%+ encontrado</h3>
-                        <div style="text-align: left; max-width: 600px; margin: 0 auto;">
-                            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                                <p><strong>💡 Dica:</strong> Com 60%+ de similaridade, apenas correspondências muito relevantes são exibidas.</p>
-                            </div>
-                            <p><strong>Para ver mais resultados:</strong></p>
-                            <ul style="text-align: left; line-height: 1.6;">
-                                <li>🔽 Reduza a similaridade mínima para 40-50%</li>
-                                <li>🔍 Use termos de busca mais específicos</li>
-                                <li>📝 Verifique se o nome do produto está correto</li>
-                                <li>⚡ Teste com apenas uma palavra-chave principal</li>
-                            </ul>
-                        </div>
-                        <div style="margin-top: 20px;">
-                            <button class="btn" onclick="document.getElementById('thresholdSlider').value=40; document.getElementById('thresholdValue').textContent='40%'; processAll();" style="background: #ffc107; color: #000;">
-                                📉 Reduzir para 40% e Tentar Novamente
-                            </button>
-                        </div>
+                        <div style="font-size: 4em; margin-bottom: 20px;">🔍</div>
+                        <h3>Nenhuma correspondência encontrada</h3>
+                        <p>Tente refinar seu termo de busca ou verifique o nome do produto.</p>
                     </div>
                 `;
                 return;
             }
-
-            // Armazenar dados globalmente para paginação
-            allMatchesData = matches;
-            totalItems = matches.length;
+            
+            allMatchesData = matchesData;
+            totalItems = matchesData.length;
             const totalPages = Math.ceil(totalItems / itemsPerPage);
 
-            // Calcular itens da página atual
             const startIndex = (currentPage - 1) * itemsPerPage;
             const endIndex = startIndex + itemsPerPage;
-            const currentPageMatches = matches.slice(startIndex, endIndex);
+            const currentPageMatches = matchesData.slice(startIndex, endIndex);
 
             const statsHTML = `
                 <div class="pagination-summary">
-                    📊 Exibindo ${currentPageMatches.length} de ${totalItems} produtos com correspondências
-                    (Página ${currentPage} de ${totalPages}) •
-                    Total no estoque: ${totalStock} •
-                    Taxa de correspondência: ${Math.round((totalWithMatches / totalStock) * 100)}%
+                    📊 Exibindo ${currentPageMatches.length} de ${totalItems} produtos do estoque.
+                    (Total com correspondências: ${totalWithMatches})
                 </div>
             `;
-
-            const matchesHTML = currentPageMatches.map(match =>
-                createMatchHTML(match.stockProduct, match.matches)
+            
+            const matchesHTML = currentPageMatches.map(data =>
+                createMatchHTML(data.stockProduct, data.matches, data.showWarning)
             ).join('');
 
             const paginationHTML = createPaginationHTML(totalPages);
-
             resultsDiv.innerHTML = statsHTML + matchesHTML + paginationHTML;
         }
 
         // Função para criar HTML da paginação
         function createPaginationHTML(totalPages) {
             if (totalPages <= 1) return '';
-
             let paginationHTML = '<div class="pagination">';
+            paginationHTML += `<button ${currentPage <= 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})">◀ Anterior</button>`;
 
-            // Botão Anterior
-            paginationHTML += `
-                <button ${currentPage <= 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})">
-                    ◀ Anterior
-                </button>
-            `;
+            const startPage = Math.max(1, currentPage - 2);
+            const endPage = Math.min(totalPages, currentPage + 2);
 
-            // Páginas numeradas (máximo 7 botões)
-            const startPage = Math.max(1, currentPage - 3);
-            const endPage = Math.min(totalPages, currentPage + 3);
-
-            if (startPage > 1) {
-                paginationHTML += `<button onclick="changePage(1)">1</button>`;
-                if (startPage > 2) {
-                    paginationHTML += `<span style="padding: 10px; color: #6c757d;">...</span>`;
-                }
-            }
+            if (startPage > 1) paginationHTML += `<button onclick="changePage(1)">1</button>${startPage > 2 ? `<span>...</span>` : ''}`;
 
             for (let i = startPage; i <= endPage; i++) {
-                paginationHTML += `
-                    <button class="${i === currentPage ? 'active' : ''}" onclick="changePage(${i})">
-                        ${i}
-                    </button>
-                `;
+                paginationHTML += `<button class="${i === currentPage ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
             }
 
-            if (endPage < totalPages) {
-                if (endPage < totalPages - 1) {
-                    paginationHTML += `<span style="padding: 10px; color: #6c757d;">...</span>`;
-                }
-                paginationHTML += `<button onclick="changePage(${totalPages})">${totalPages}</button>`;
-            }
+            if (endPage < totalPages) paginationHTML += `${endPage < totalPages - 1 ? `<span>...</span>` : ''}<button onclick="changePage(${totalPages})">${totalPages}</button>`;
 
-            // Botão Próximo
-            paginationHTML += `
-                <button ${currentPage >= totalPages ? 'disabled' : ''} onclick="changePage(${currentPage + 1})">
-                    Próximo ▶
-                </button>
-            `;
-
-            paginationHTML += `
-                <div class="pagination-info">
-                    Mostrando ${((currentPage - 1) * itemsPerPage) + 1}-${Math.min(currentPage * itemsPerPage, totalItems)} de ${totalItems}
-                </div>
-            `;
-
+            paginationHTML += `<button ${currentPage >= totalPages ? 'disabled' : ''} onclick="changePage(${currentPage + 1})">Próximo ▶</button>`;
             paginationHTML += '</div>';
             return paginationHTML;
         }
@@ -870,423 +646,122 @@
         function changePage(page) {
             const totalPages = Math.ceil(totalItems / itemsPerPage);
             if (page < 1 || page > totalPages) return;
-
             currentPage = page;
-
-            // Re-renderizar apenas os dados atuais
-            renderResults(allMatchesData, window.stockProducts ? window.stockProducts.length : 0, allMatchesData.length);
-
-            // Scroll to top dos resultados
+            renderResults(allMatchesData, window.stockProducts ? window.stockProducts.length : 0, allMatchesData.filter(m => m.matches.length > 0).length);
             document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
         }
 
         // Função para mudar itens por página
         function changeItemsPerPage() {
-            const newItemsPerPage = parseInt(document.getElementById('itemsPerPageSelect').value);
-
-            // Calcular qual item estava sendo exibido para manter contexto
             const currentFirstItem = (currentPage - 1) * itemsPerPage + 1;
-
-            itemsPerPage = newItemsPerPage;
+            itemsPerPage = parseInt(document.getElementById('itemsPerPageSelect').value);
             currentPage = Math.ceil(currentFirstItem / itemsPerPage);
-
-            // Re-renderizar se temos dados
             if (allMatchesData.length > 0) {
-                renderResults(allMatchesData, window.stockProducts ? window.stockProducts.length : 0, allMatchesData.length);
+                renderResults(allMatchesData, window.stockProducts ? window.stockProducts.length : 0, allMatchesData.filter(m => m.matches.length > 0).length);
             }
         }
 
-        // Função para processar todos os produtos
+        // Função principal para processar todos os produtos
         async function processAll() {
             const resultsDiv = document.getElementById('results');
-            const threshold = parseInt(document.getElementById('thresholdSlider').value);
-            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-
-            // Resetar paginação para nova busca
+            const searchTerm = document.getElementById('searchInput').value;
             currentPage = 1;
-            allMatchesData = [];
-            totalItems = 0;
 
-            resultsDiv.innerHTML = `
-                <div class="loading">
-                    <h3>⚙️ Processando correspondências...</h3>
-                    <p>Analisando ${window.stockProducts ? window.stockProducts.length : 0} produtos do estoque</p>
-                </div>
-            `;
-
-            // Aguardar um frame para mostrar o loading
+            resultsDiv.innerHTML = `<div class="loading"><h3>⚙️ Processando...</h3></div>`;
             await new Promise(resolve => requestAnimationFrame(resolve));
 
             try {
-                // Verificar se os dados estão disponíveis
                 if (!window.stockProducts || !window.inventoryProducts) {
-                    // Tentar carregar os dados das planilhas
                     await loadData();
                 }
 
                 let stockProducts = window.stockProducts || [];
                 const inventoryProducts = window.inventoryProducts || [];
 
-                // Filtrar produtos do estoque baseado na busca
                 if (searchTerm) {
-                    stockProducts = stockProducts.filter(product => 
-                        normalizeText(product.produto).includes(normalizeText(searchTerm))
-                    );
+                    const normalizedSearch = normalizeText(searchTerm);
+                    stockProducts = stockProducts.filter(product => normalizeText(product.produto).includes(normalizedSearch));
                 }
 
                 const allMatches = [];
-                let processed = 0;
 
                 for (const stockProduct of stockProducts) {
-                    const matches = findMatches(stockProduct, inventoryProducts, threshold);
-                    
-                    if (matches.length > 0) {
-                        allMatches.push({
-                            stockProduct,
-                            matches
-                        });
-                    }
+                    const allPotentialMatches = findMatches(stockProduct, inventoryProducts);
+                    const highQualityMatches = allPotentialMatches.filter(match => match.similarity >= HIGH_SIMILARITY_THRESHOLD);
 
-                    processed++;
-                    
-                    // Atualizar progresso a cada 50 produtos
-                    if (processed % 50 === 0) {
-                        resultsDiv.innerHTML = `
-                            <div class="loading">
-                                <h3>⚙️ Processando correspondências...</h3>
-                                <p>Processados ${processed} de ${stockProducts.length} produtos</p>
-                            </div>
-                        `;
-                        await new Promise(resolve => requestAnimationFrame(resolve));
+                    let matchesToShow;
+                    let needsWarning = false;
+
+                    if (highQualityMatches.length > 0) {
+                        matchesToShow = highQualityMatches;
+                    } else if (allPotentialMatches.length > 0) {
+                        matchesToShow = allPotentialMatches.slice(0, 3);
+                        needsWarning = true;
+                    } else {
+                        matchesToShow = [];
                     }
+                    
+                    allMatches.push({
+                        stockProduct,
+                        matches: matchesToShow,
+                        showWarning: needsWarning
+                    });
                 }
-
-                renderResults(allMatches, stockProducts.length, allMatches.length);
-
+                
+                renderResults(allMatches, stockProducts.length, allMatches.filter(m => m.matches.length > 0).length);
             } catch (error) {
                 console.error('Erro ao processar:', error);
-                resultsDiv.innerHTML = `
-                    <div class="no-results">
-                        <div style="font-size: 4em; margin-bottom: 20px;">⚠️</div>
-                        <h3>Erro ao carregar dados reais</h3>
-                        <div style="text-align: left; max-width: 700px; margin: 0 auto;">
-                            <p><strong>🔍 Verifique os seguintes pontos:</strong></p>
-                            <ol style="text-align: left; line-height: 1.8;">
-                                <li><strong>Nomes dos arquivos:</strong> Devem ser exatamente <code>estoque.json</code> e <code>inventario.json</code></li>
-                                <li><strong>Local:</strong> Arquivos devem estar na raiz do repositório (mesmo nível do index.html)</li>
-                                <li><strong>GitHub Pages:</strong> Aguarde alguns minutos após o upload para o GitHub Pages atualizar</li>
-                                <li><strong>Formato JSON válido:</strong> Use um validador JSON online para verificar</li>
-                                <li><strong>Console do navegador:</strong> Abra F12 > Console para ver logs detalhados</li>
-                            </ol>
-                            <p><strong>📁 Estrutura esperada no repositório:</strong></p>
-                            <pre style="background: #f8f9fa; padding: 15px; border-radius: 8px; font-size: 0.9em;">
-estoque.json          ← Seus dados do estoque
-inventario.json       ← Seus dados do inventário
-index.html            ← Esta página
-</pre>
-                            <p><strong>⚡ Por enquanto, usando dados de exemplo para demonstração.</strong></p>
-                        </div>
-                        <div style="margin-top: 20px;">
-                            <button class="btn" onclick="loadData()" style="margin-right: 10px;">🔄 Tentar Novamente</button>
-                            <button class="btn" onclick="window.open('https://jsonlint.com/', '_blank')" style="background: #6c757d;">🔧 Validar JSON</button>
-                        </div>
-                    </div>
-                `;
+                resultsDiv.innerHTML = `<div class="no-results"><h3>⚠️ Erro ao processar dados</h3><p>${error.message}</p></div>`;
             }
         }
-
-        // Função para carregar dados via fetch (para GitHub Pages)
+        
+        // Função para carregar dados dos arquivos JSON
         async function loadData() {
             try {
-                console.log('🔄 Iniciando carregamento dos dados...');
-                console.log('📍 URL atual:', window.location.href);
+                const [stockResponse, inventoryResponse] = await Promise.all([
+                    fetch('estoque.json'),
+                    fetch('inventario.json')
+                ]);
 
-                // Lista de possíveis caminhos para os arquivos
-                const possiblePaths = [
-                    { stock: 'estoque.json', inventory: 'inventario.json' },
-                    { stock: './estoque.json', inventory: './inventario.json' },
-                    { stock: '/estoque.json', inventory: '/inventario.json' },
-                    { stock: 'data/estoque.json', inventory: 'data/inventario.json' },
-                    { stock: './data/estoque.json', inventory: './data/inventario.json' }
-                ];
-
-                // Tentar cada caminho
-                for (let i = 0; i < possiblePaths.length; i++) {
-                    const paths = possiblePaths[i];
-                    console.log(`🔍 Tentativa ${i + 1}: Testando caminhos:`, paths);
-
-                    try {
-                        console.log(`📄 Buscando estoque em: ${paths.stock}`);
-                        const stockResponse = await fetch(paths.stock);
-                        console.log(`📊 Status estoque: ${stockResponse.status} ${stockResponse.statusText}`);
-
-                        console.log(`📄 Buscando inventário em: ${paths.inventory}`);
-                        const inventoryResponse = await fetch(paths.inventory);
-                        console.log(`📊 Status inventário: ${inventoryResponse.status} ${inventoryResponse.statusText}`);
-
-                        if (stockResponse.ok && inventoryResponse.ok) {
-                            console.log('✅ Arquivos JSON encontrados! Fazendo parse...');
-
-                            const stockData = await stockResponse.json();
-                            const inventoryData = await inventoryResponse.json();
-
-                            console.log(`📦 Dados do estoque:`, {
-                                tipo: Array.isArray(stockData) ? 'Array' : typeof stockData,
-                                tamanho: Array.isArray(stockData) ? stockData.length : 'N/A',
-                                amostra: Array.isArray(stockData) ? stockData.slice(0, 2) : stockData
-                            });
-
-                            console.log(`🏪 Dados do inventário:`, {
-                                tipo: Array.isArray(inventoryData) ? 'Array' : typeof inventoryData,
-                                tamanho: Array.isArray(inventoryData) ? inventoryData.length : 'N/A',
-                                amostra: Array.isArray(inventoryData) ? inventoryData.slice(0, 2) : inventoryData
-                            });
-
-                            window.stockProducts = Array.isArray(stockData) ? stockData : [stockData];
-                            window.inventoryProducts = Array.isArray(inventoryData) ? inventoryData : [inventoryData];
-
-                            console.log(`🎉 SUCESSO! Produtos do estoque: ${window.stockProducts.length}`);
-                            console.log(`🎉 SUCESSO! Produtos do inventário: ${window.inventoryProducts.length}`);
-
-                            return true;
-                        }
-
-                    } catch (fetchError) {
-                        console.warn(`❌ Erro na tentativa ${i + 1}:`, fetchError.message);
-                    }
+                if (!stockResponse.ok || !inventoryResponse.ok) {
+                    throw new Error('Não foi possível encontrar os arquivos estoque.json ou inventario.json');
                 }
 
-                // Se chegou aqui, nenhum JSON foi encontrado. Tentar CSVs
-                console.log('⚠️ Nenhum JSON encontrado. Tentando CSVs...');
-
-                const csvPaths = [
-                    { stock: 'estoque.csv', inventory: 'inventario.csv' },
-                    { stock: './estoque.csv', inventory: './inventario.csv' },
-                    { stock: '/estoque.csv', inventory: '/inventario.csv' }
-                ];
-
-                for (let i = 0; i < csvPaths.length; i++) {
-                    const paths = csvPaths[i];
-                    console.log(`🔍 CSV Tentativa ${i + 1}:`, paths);
-
-                    try {
-                        const stockResponse = await fetch(paths.stock);
-                        const inventoryResponse = await fetch(paths.inventory);
-
-                        if (stockResponse.ok && inventoryResponse.ok) {
-                            console.log('✅ Arquivos CSV encontrados!');
-
-                            const stockCsv = await stockResponse.text();
-                            const inventoryCsv = await inventoryResponse.text();
-
-                            window.stockProducts = parseCSV(stockCsv, 'stock');
-                            window.inventoryProducts = parseCSV(inventoryCsv, 'inventory');
-
-                            console.log(`🎉 CSV SUCESSO! Produtos do estoque: ${window.stockProducts.length}`);
-                            console.log(`🎉 CSV SUCESSO! Produtos do inventário: ${window.inventoryProducts.length}`);
-
-                            return true;
-                        }
-                    } catch (csvError) {
-                        console.warn(`❌ CSV Erro na tentativa ${i + 1}:`, csvError.message);
-                    }
-                }
-
-                throw new Error('❌ Nenhum arquivo encontrado em todos os caminhos testados');
+                window.stockProducts = await stockResponse.json();
+                window.inventoryProducts = await inventoryResponse.json();
+                console.log(`Dados carregados: ${window.stockProducts.length} itens de estoque, ${window.inventoryProducts.length} itens de inventário.`);
+                return true;
 
             } catch (error) {
-                console.error('💥 Erro crítico no carregamento:', error);
-
-                // Usar dados de exemplo para demonstração
-                console.log('🔄 Carregando dados de exemplo para demonstração...');
-                
-                window.stockProducts = [
-                    { codigo: 5792, produto: "ABAIXADOR DE LINGUA DE MADEIRA PCT C/100", qtdeAtual: 20 },
-                    { codigo: 3467, produto: "ABSORVENTE ADULTO", qtdeAtual: 34 },
-                    { codigo: 1981, produto: "ADESIVO LASER MAXPRINT 50X101,6 P/SORO", qtdeAtual: 458 },
-                    { codigo: 5524, produto: "ADESIVO LASER PARA SERINGA 66,7X25,4", qtdeAtual: 555 },
-                    { codigo: 1234, produto: "ALCOOL EM GEL 70% - 500ML", qtdeAtual: 127 },
-                    { codigo: 5678, produto: "ALGODAO HIDROFILO 500G", qtdeAtual: 45 },
-                    { codigo: 9012, produto: "ATADURA CREPE 15CM", qtdeAtual: 89 },
-                    { codigo: 3456, produto: "BANDAGEM ELASTICA 10CM", qtdeAtual: 67 },
-                    { codigo: 7890, produto: "CATETER VENOSO 22G", qtdeAtual: 234 },
-                    { codigo: 2345, produto: "COMPRESSA GAZE ESTERIL 7,5X7,5", qtdeAtual: 156 },
-                    // Exemplo específico da VANCOMICINA
-                    { codigo: 8888, produto: "VANCOMICINA 1G", qtdeAtual: 25 }
-                ];
-
-                window.inventoryProducts = [
-                    // Todas as opções de ABAIXADOR DE LINGUA que você mencionou
-                    { cd_produto: 25339, ds_produto: "BOCAL P/ ENDOSCOPIA ADULTO C/ ABAIXADOR DE LINGUA E ELASTICO", unidade: "UNIDADE", ds_classe: "MATERIAL HOSPITALAR", ds_sub_cla: "SONDAS, CANULAS E DRENAGENS" },
-                    { cd_produto: 26087, ds_produto: "BOCAL P/ ENDOSCOPIA PEDIATRICO C/ ABAIXADOR DE LINGUA E ELAS", unidade: "UNIDADE", ds_classe: "MATERIAL HOSPITALAR", ds_sub_cla: "SONDAS, CANULAS E DRENAGENS" },
-                    { cd_produto: 17639, ds_produto: "ABAIXADOR DE LINGUA BRUENINGS (AFASTADOR) 19CM", unidade: "UNIDADE", ds_classe: "MATERIAL HOSPITALAR", ds_sub_cla: "OUTROS" },
-                    { cd_produto: 28599, ds_produto: "ESPATULA DE MADEIRA ABAIXADOR DE LINGUA EMB. INDIVIDUAL", unidade: "UNIDADE", ds_classe: "MATERIAL HOSPITALAR", ds_sub_cla: "OUTROS" },
-                    { cd_produto: 362, ds_produto: "PACOTE DE ESPATULA DE MADEIRA ABAIXADOR DE LINGUA", unidade: "UNIDADE", ds_classe: "MATERIAL HOSPITALAR", ds_sub_cla: "OUTROS" },
-                    { cd_produto: 57705, ds_produto: "ABAIXADOR DE LINGUA BRUENINGS 18CM", unidade: "UNIDADE", ds_classe: "INSTRUMENTAL CIRURGICO", ds_sub_cla: "INSTRUMENTAIS DIVERSOS" },
-                    // Exemplos da VANCOMICINA que você mencionou
-                    { cd_produto: 11111, ds_produto: "TIRA ETEST PARA VANCOMICINA", unidade: "UNIDADE", ds_classe: "MATERIAL LABORATORIO", ds_sub_cla: "TESTES" },
-                    { cd_produto: 22222, ds_produto: "VANCOMICINA PO P/ SOL INJ 500MG", unidade: "FRASCO", ds_classe: "MEDICAMENTOS", ds_sub_cla: "ANTIBIOTICOS" },
-                    { cd_produto: 33333, ds_produto: "VANCOMICINA PO P/ SOL INJ 500MG - PRODUCAO", unidade: "FRASCO", ds_classe: "MEDICAMENTOS", ds_sub_cla: "ANTIBIOTICOS" },
-                    // Outros produtos para demonstração
-                    { cd_produto: 22655, ds_produto: "ABSORVENTE GERIATRICO ADULTO UNISSEX", unidade: "UNIDADE", ds_classe: "HIGIENE PESSOAL", ds_sub_cla: "ABSORVENTES" },
-                    { cd_produto: 22656, ds_produto: "ADESIVO LASER TRANSPARENTE 50X101 SORO", unidade: "UNIDADE", ds_classe: "MATERIAL DE ESCRITORIO", ds_sub_cla: "ETIQUETAS" },
-                    { cd_produto: 22657, ds_produto: "ADESIVO LASER SERINGA 66X25 BRANCO", unidade: "UNIDADE", ds_classe: "MATERIAL DE ESCRITORIO", ds_sub_cla: "ETIQUETAS" },
-                    { cd_produto: 22658, ds_produto: "ALCOOL GEL ANTISSEPTICO 70% 500ML", unidade: "FRASCO", ds_classe: "MATERIAL DE LIMPEZA", ds_sub_cla: "DESINFETANTES" },
-                    { cd_produto: 22659, ds_produto: "ALGODAO HIDROFILO ROLO 500G", unidade: "ROLO", ds_classe: "MATERIAL MEDICO HOSPITALAR", ds_sub_cla: "OUTROS" },
-                    { cd_produto: 22660, ds_produto: "ATADURA CREPE 15CM X 4,5M", unidade: "UNIDADE", ds_classe: "MATERIAL MEDICO HOSPITALAR", ds_sub_cla: "CURATIVOS" },
-                    { cd_produto: 22661, ds_produto: "BANDAGEM ELASTICA 10CM COMPRESSIVA", unidade: "UNIDADE", ds_classe: "MATERIAL MEDICO HOSPITALAR", ds_sub_cla: "CURATIVOS" },
-                    { cd_produto: 22662, ds_produto: "CATETER VENOSO PERIFERICO 22G", unidade: "UNIDADE", ds_classe: "MATERIAL MEDICO HOSPITALAR", ds_sub_cla: "SONDAS, CANULAS E DRENAGENS" },
-                    { cd_produto: 22663, ds_produto: "COMPRESSA GAZE ESTERIL 7,5X7,5 PCT", unidade: "PACOTE", ds_classe: "MATERIAL MEDICO HOSPITALAR", ds_sub_cla: "CURATIVOS" }
-                ];
-                
-                return true;
+                console.error('Erro ao carregar arquivos JSON:', error);
+                throw error;
             }
         }
 
-        // Função para fazer parse simples de CSV
-        function parseCSV(csvText, type) {
-            const lines = csvText.split('\n').filter(line => line.trim());
-            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-            const result = [];
-            
-            for (let i = 1; i < lines.length; i++) {
-                const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
-                const obj = {};
-                
-                if (type === 'stock') {
-                    obj.codigo = values[1] || '';
-                    obj.produto = values[2] || '';
-                    obj.qtdeAtual = values[13] || 0;
-                } else {
-                    obj.cd_produto = values[0] || '';
-                    obj.ds_produto = values[1] || '';
-                    obj.unidade = values[2] || '';
-                    obj.ds_classe = values[6] || '';
-                    obj.ds_sub_cla = values[8] || '';
-                }
-                
-                if ((type === 'stock' && obj.produto) || (type === 'inventory' && obj.ds_produto)) {
-                    result.push(obj);
-                }
-            }
-            
-            return result;
-        }
-
-        // Event listeners
+        // Event Listeners
         document.getElementById('searchInput').addEventListener('input', function() {
-            // Auto-processar após 1 segundo de inatividade
             clearTimeout(this.searchTimeout);
             this.searchTimeout = setTimeout(() => {
                 if (this.value.length >= 3 || this.value.length === 0) {
                     processAll();
                 }
-            }, 1000);
+            }, 800);
         });
-
-        document.getElementById('thresholdSlider').addEventListener('input', function() {
-            document.getElementById('thresholdValue').textContent = this.value + '%';
-        });
-
-        document.getElementById('thresholdSlider').addEventListener('change', function() {
-            processAll();
-        });
-
-        // Inicialização
-        window.addEventListener('load', async function() {
-            console.log('Carregando aplicação...');
-            await initializeApp();
-        });
-
-        async function initializeApp() {
+        
+        // Inicialização da aplicação
+        window.addEventListener('load', async () => {
             try {
-                // Tentar carregar os dados das planilhas
-                console.log('🚀 Inicializando aplicação...');
-
-                const success = await loadData();
-
-                if (success && window.stockProducts && window.inventoryProducts) {
-                    console.log('✅ Dados carregados com sucesso!');
-                    console.log(`📦 Estoque: ${window.stockProducts.length} produtos`);
-                    console.log(`🏪 Inventário: ${window.inventoryProducts.length} produtos`);
-
-                    // Processar automaticamente na inicialização
-                    setTimeout(() => {
-                        processAll();
-                    }, 500);
-                } else {
-                    console.warn('⚠️ Não foi possível carregar dados reais, usando exemplos');
-                    throw new Error('Dados reais não encontrados');
-                }
-
-            } catch (error) {
-                console.error('💥 Erro na inicialização:', error);
+                await loadData();
+                processAll();
+            } catch (e) {
                 document.getElementById('results').innerHTML = `
                     <div class="no-results">
-                        <div style="font-size: 4em; margin-bottom: 20px;">📁</div>
-                        <h3>Dados reais não encontrados - Usando exemplos</h3>
-                        <div style="text-align: left; max-width: 700px; margin: 0 auto;">
-                            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                                <p><strong>💡 A aplicação está funcionando com dados de exemplo!</strong></p>
-                                <p>Para usar seus dados reais do estoque de 528 itens, verifique:</p>
-                            </div>
-                            <ol style="text-align: left; line-height: 1.8;">
-                                <li><strong>📂 Estrutura dos arquivos:</strong>
-                                    <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 0.9em; margin: 5px 0;">
-estoque.json          ← Array com 528 produtos do estoque
-inventario.json       ← Array com produtos do inventário
-index.html            ← Esta página</pre>
-                                </li>
-                                <li><strong>🔧 Formato JSON correto:</strong> Arrays válidos no formato esperado</li>
-                                <li><strong>⏰ GitHub Pages:</strong> Pode demorar alguns minutos para atualizar após upload</li>
-                                <li><strong>🛠️ Debug:</strong> Abra F12 > Console para ver tentativas de carregamento</li>
-                            </ol>
-
-                            <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                                <p><strong>✅ Funcionalidades ativas:</strong></p>
-                                <ul style="text-align: left; margin: 0;">
-                                    <li>Busca inteligente em 6 níveis</li>
-                                    <li>Múltiplas correspondências por produto</li>
-                                    <li>Sistema de cópia fácil para Excel</li>
-                                    <li>Interface responsiva e intuitiva</li>
-                                </ul>
-                            </div>
-                        </div>
-                        <div style="margin-top: 20px;">
-                            <button class="btn" onclick="loadData()" style="margin-right: 10px;">🔄 Tentar Carregar Dados Reais</button>
-                            <button class="btn" onclick="processAll()" style="background: #28a745;">▶️ Testar com Exemplos</button>
-                        </div>
-                    </div>
-                `;
+                        <h3>⚠️ Erro ao carregar dados</h3>
+                        <p>Verifique se os arquivos <code>estoque.json</code> e <code>inventario.json</code> estão no mesmo diretório que este arquivo HTML e tente novamente.</p>
+                        <button class="btn" onclick="location.reload()">Tentar Novamente</button>
+                    </div>`;
             }
-        }
-
-        // Função para exportar resultados (bonus)
-        function exportResults() {
-            const threshold = parseInt(document.getElementById('thresholdSlider').value);
-            const stockProducts = window.stockProducts || [];
-            const inventoryProducts = window.inventoryProducts || [];
-            
-            let csvContent = "Produto Estoque,Código Estoque,Qtd Atual,Produto Inventário,Código Inventário,Similaridade%\n";
-            
-            for (const stockProduct of stockProducts) {
-                const matches = findMatches(stockProduct, inventoryProducts, threshold);
-                
-                if (matches.length > 0) {
-                    matches.forEach(match => {
-                        csvContent += `"${stockProduct.produto}",${stockProduct.codigo},${stockProduct.qtdeAtual},"${match.ds_produto}",${match.cd_produto},${match.similarity}\n`;
-                    });
-                } else {
-                    csvContent += `"${stockProduct.produto}",${stockProduct.codigo},${stockProduct.qtdeAtual},"","",""\n`;
-                }
-            }
-            
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = 'correspondencias_produtos.csv';
-            link.click();
-        }
+        });
     </script>
 </body>
 </html>
