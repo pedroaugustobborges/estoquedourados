@@ -612,47 +612,51 @@
             }
         }
 
-        // Função para carregar dados das planilhas reais
         async function loadData() {
             try {
-                console.log('Carregando dados das planilhas...');
+                console.log('Carregando dados das planilhas via fetch (GitHub)...');
                 
-                // Carregar planilha de estoque
-                const stockData = await window.fs.readFile('POSIÇAO ESTOQUE 250925.xlsx');
-                const stockWorkbook = XLSX.read(stockData, {
-                    cellStyles: true,
-                    cellFormulas: true,
-                    cellDates: true,
-                    cellNF: true,
-                    sheetStubs: true
-                });
-                
+                // Caminhos relativos para os arquivos no seu repositório
+                const stockUrl = 'POSIÇAO ESTOQUE 250925.xlsx';
+                const inventoryUrl = 'Codigos para inventário HRD.xlsx';
+        
+                // Usar Promise.all para carregar os dois arquivos em paralelo
+                const [stockResponse, inventoryResponse] = await Promise.all([
+                    fetch(stockUrl),
+                    fetch(inventoryUrl)
+                ]);
+        
+                // Verifica se os arquivos foram encontrados (status 200)
+                if (!stockResponse.ok) {
+                    throw new Error(`Não foi possível encontrar a planilha de estoque. Status: ${stockResponse.statusText}`);
+                }
+                if (!inventoryResponse.ok) {
+                    throw new Error(`Não foi possível encontrar a planilha de inventário. Status: ${inventoryResponse.statusText}`);
+                }
+        
+                // Converte a resposta da rede para um formato que a biblioteca XLSX entende
+                const [stockData, inventoryData] = await Promise.all([
+                    stockResponse.arrayBuffer(),
+                    inventoryResponse.arrayBuffer()
+                ]);
+        
+                // Ler e processar a planilha de estoque
+                const stockWorkbook = XLSX.read(stockData, { type: 'array' });
                 const stockSheet = stockWorkbook.Sheets[stockWorkbook.SheetNames[0]];
                 const stockJsonData = XLSX.utils.sheet_to_json(stockSheet, { header: 1 });
-                
-                // Processar dados do estoque (pular cabeçalho)
+        
                 window.stockProducts = stockJsonData.slice(1).map(row => ({
                     codigo: row[1],
                     produto: row[2],
                     qtdeAtual: row[13] || 0
                 })).filter(item => item.produto && item.produto.trim() !== '');
-                
                 console.log(`Produtos do estoque carregados: ${window.stockProducts.length}`);
-                
-                // Carregar planilha de inventário
-                const inventoryData = await window.fs.readFile('Codigos para inventário HRD.xlsx');
-                const inventoryWorkbook = XLSX.read(inventoryData, {
-                    cellStyles: true,
-                    cellFormulas: true,
-                    cellDates: true,
-                    cellNF: true,
-                    sheetStubs: true
-                });
-                
+        
+                // Ler e processar a planilha de inventário
+                const inventoryWorkbook = XLSX.read(inventoryData, { type: 'array' });
                 const inventorySheet = inventoryWorkbook.Sheets[inventoryWorkbook.SheetNames[0]];
                 const inventoryJsonData = XLSX.utils.sheet_to_json(inventorySheet, { header: 1 });
                 
-                // Processar dados do inventário (pular cabeçalho)
                 window.inventoryProducts = inventoryJsonData.slice(1).map(row => ({
                     cd_produto: row[0],
                     ds_produto: row[1],
@@ -661,13 +665,15 @@
                     ds_classe: row[6] || '',
                     ds_sub_cla: row[8] || ''
                 })).filter(item => item.ds_produto && item.ds_produto.trim() !== '');
-                
                 console.log(`Produtos do inventário carregados: ${window.inventoryProducts.length}`);
                 
                 return true;
-                
+        
             } catch (error) {
-                console.error('Erro ao carregar planilhas:', error);
+                console.error('Erro ao carregar planilhas do repositório:', error);
+                throw new Error('Não foi possível carregar as planilhas via rede. Verifique os nomes e a localização dos arquivos no repositório.');
+            }
+        }
                 
                 // Tentar usar dados já existentes no window (do analysis tool)
                 if (window.stockProducts && window.inventoryProducts) {
@@ -776,4 +782,5 @@
         }
     </script>
 </body>
+
 </html>
