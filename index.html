@@ -765,9 +765,28 @@
                 resultsDiv.innerHTML = `
                     <div class="no-results">
                         <div style="font-size: 4em; margin-bottom: 20px;">⚠️</div>
-                        <h3>Erro ao carregar dados</h3>
-                        <p>Não foi possível carregar as planilhas. Verifique se os arquivos estão disponíveis.</p>
-                        <button class="btn" onclick="loadData()">🔄 Tentar novamente</button>
+                        <h3>Erro ao carregar dados reais</h3>
+                        <div style="text-align: left; max-width: 700px; margin: 0 auto;">
+                            <p><strong>🔍 Verifique os seguintes pontos:</strong></p>
+                            <ol style="text-align: left; line-height: 1.8;">
+                                <li><strong>Nomes dos arquivos:</strong> Devem ser exatamente <code>estoque.json</code> e <code>inventario.json</code></li>
+                                <li><strong>Local:</strong> Arquivos devem estar na raiz do repositório (mesmo nível do index.html)</li>
+                                <li><strong>GitHub Pages:</strong> Aguarde alguns minutos após o upload para o GitHub Pages atualizar</li>
+                                <li><strong>Formato JSON válido:</strong> Use um validador JSON online para verificar</li>
+                                <li><strong>Console do navegador:</strong> Abra F12 > Console para ver logs detalhados</li>
+                            </ol>
+                            <p><strong>📁 Estrutura esperada no repositório:</strong></p>
+                            <pre style="background: #f8f9fa; padding: 15px; border-radius: 8px; font-size: 0.9em;">
+estoque.json          ← Seus dados do estoque
+inventario.json       ← Seus dados do inventário
+index.html            ← Esta página
+</pre>
+                            <p><strong>⚡ Por enquanto, usando dados de exemplo para demonstração.</strong></p>
+                        </div>
+                        <div style="margin-top: 20px;">
+                            <button class="btn" onclick="loadData()" style="margin-right: 10px;">🔄 Tentar Novamente</button>
+                            <button class="btn" onclick="window.open('https://jsonlint.com/', '_blank')" style="background: #6c757d;">🔧 Validar JSON</button>
+                        </div>
                     </div>
                 `;
             }
@@ -776,63 +795,107 @@
         // Função para carregar dados via fetch (para GitHub Pages)
         async function loadData() {
             try {
-                console.log('Carregando dados via fetch...');
-                
-                // Tentar carregar arquivo JSON do estoque
-                let stockResponse, inventoryResponse;
-                
-                try {
-                    stockResponse = await fetch('estoque.json');
-                    if (!stockResponse.ok) throw new Error('Arquivo estoque.json não encontrado');
-                    
-                    inventoryResponse = await fetch('inventario.json');
-                    if (!inventoryResponse.ok) throw new Error('Arquivo inventario.json não encontrado');
-                    
-                    const stockData = await stockResponse.json();
-                    const inventoryData = await inventoryResponse.json();
-                    
-                    window.stockProducts = stockData;
-                    window.inventoryProducts = inventoryData;
-                    
-                    console.log(`Produtos do estoque carregados: ${window.stockProducts.length}`);
-                    console.log(`Produtos do inventário carregados: ${window.inventoryProducts.length}`);
-                    
-                    return true;
-                    
-                } catch (fetchError) {
-                    console.log('Arquivos JSON não encontrados, tentando carregar CSVs...');
-                    
-                    // Tentar carregar CSVs como alternativa
+                console.log('🔄 Iniciando carregamento dos dados...');
+                console.log('📍 URL atual:', window.location.href);
+
+                // Lista de possíveis caminhos para os arquivos
+                const possiblePaths = [
+                    { stock: 'estoque.json', inventory: 'inventario.json' },
+                    { stock: './estoque.json', inventory: './inventario.json' },
+                    { stock: '/estoque.json', inventory: '/inventario.json' },
+                    { stock: 'data/estoque.json', inventory: 'data/inventario.json' },
+                    { stock: './data/estoque.json', inventory: './data/inventario.json' }
+                ];
+
+                // Tentar cada caminho
+                for (let i = 0; i < possiblePaths.length; i++) {
+                    const paths = possiblePaths[i];
+                    console.log(`🔍 Tentativa ${i + 1}: Testando caminhos:`, paths);
+
                     try {
-                        stockResponse = await fetch('estoque.csv');
-                        inventoryResponse = await fetch('inventario.csv');
-                        
-                        if (!stockResponse.ok || !inventoryResponse.ok) {
-                            throw new Error('Arquivos CSV não encontrados');
+                        console.log(`📄 Buscando estoque em: ${paths.stock}`);
+                        const stockResponse = await fetch(paths.stock);
+                        console.log(`📊 Status estoque: ${stockResponse.status} ${stockResponse.statusText}`);
+
+                        console.log(`📄 Buscando inventário em: ${paths.inventory}`);
+                        const inventoryResponse = await fetch(paths.inventory);
+                        console.log(`📊 Status inventário: ${inventoryResponse.status} ${inventoryResponse.statusText}`);
+
+                        if (stockResponse.ok && inventoryResponse.ok) {
+                            console.log('✅ Arquivos JSON encontrados! Fazendo parse...');
+
+                            const stockData = await stockResponse.json();
+                            const inventoryData = await inventoryResponse.json();
+
+                            console.log(`📦 Dados do estoque:`, {
+                                tipo: Array.isArray(stockData) ? 'Array' : typeof stockData,
+                                tamanho: Array.isArray(stockData) ? stockData.length : 'N/A',
+                                amostra: Array.isArray(stockData) ? stockData.slice(0, 2) : stockData
+                            });
+
+                            console.log(`🏪 Dados do inventário:`, {
+                                tipo: Array.isArray(inventoryData) ? 'Array' : typeof inventoryData,
+                                tamanho: Array.isArray(inventoryData) ? inventoryData.length : 'N/A',
+                                amostra: Array.isArray(inventoryData) ? inventoryData.slice(0, 2) : inventoryData
+                            });
+
+                            window.stockProducts = Array.isArray(stockData) ? stockData : [stockData];
+                            window.inventoryProducts = Array.isArray(inventoryData) ? inventoryData : [inventoryData];
+
+                            console.log(`🎉 SUCESSO! Produtos do estoque: ${window.stockProducts.length}`);
+                            console.log(`🎉 SUCESSO! Produtos do inventário: ${window.inventoryProducts.length}`);
+
+                            return true;
                         }
-                        
-                        const stockCsv = await stockResponse.text();
-                        const inventoryCsv = await inventoryResponse.text();
-                        
-                        // Parse CSV simples
-                        window.stockProducts = parseCSV(stockCsv, 'stock');
-                        window.inventoryProducts = parseCSV(inventoryCsv, 'inventory');
-                        
-                        console.log(`Produtos do estoque carregados: ${window.stockProducts.length}`);
-                        console.log(`Produtos do inventário carregados: ${window.inventoryProducts.length}`);
-                        
-                        return true;
-                        
-                    } catch (csvError) {
-                        throw new Error('Nenhum arquivo de dados encontrado');
+
+                    } catch (fetchError) {
+                        console.warn(`❌ Erro na tentativa ${i + 1}:`, fetchError.message);
                     }
                 }
-                
+
+                // Se chegou aqui, nenhum JSON foi encontrado. Tentar CSVs
+                console.log('⚠️ Nenhum JSON encontrado. Tentando CSVs...');
+
+                const csvPaths = [
+                    { stock: 'estoque.csv', inventory: 'inventario.csv' },
+                    { stock: './estoque.csv', inventory: './inventario.csv' },
+                    { stock: '/estoque.csv', inventory: '/inventario.csv' }
+                ];
+
+                for (let i = 0; i < csvPaths.length; i++) {
+                    const paths = csvPaths[i];
+                    console.log(`🔍 CSV Tentativa ${i + 1}:`, paths);
+
+                    try {
+                        const stockResponse = await fetch(paths.stock);
+                        const inventoryResponse = await fetch(paths.inventory);
+
+                        if (stockResponse.ok && inventoryResponse.ok) {
+                            console.log('✅ Arquivos CSV encontrados!');
+
+                            const stockCsv = await stockResponse.text();
+                            const inventoryCsv = await inventoryResponse.text();
+
+                            window.stockProducts = parseCSV(stockCsv, 'stock');
+                            window.inventoryProducts = parseCSV(inventoryCsv, 'inventory');
+
+                            console.log(`🎉 CSV SUCESSO! Produtos do estoque: ${window.stockProducts.length}`);
+                            console.log(`🎉 CSV SUCESSO! Produtos do inventário: ${window.inventoryProducts.length}`);
+
+                            return true;
+                        }
+                    } catch (csvError) {
+                        console.warn(`❌ CSV Erro na tentativa ${i + 1}:`, csvError.message);
+                    }
+                }
+
+                throw new Error('❌ Nenhum arquivo encontrado em todos os caminhos testados');
+
             } catch (error) {
-                console.error('Erro ao carregar dados:', error);
-                
+                console.error('💥 Erro crítico no carregamento:', error);
+
                 // Usar dados de exemplo para demonstração
-                console.log('Usando dados de exemplo...');
+                console.log('🔄 Carregando dados de exemplo para demonstração...');
                 
                 window.stockProducts = [
                     { codigo: 5792, produto: "ABAIXADOR DE LINGUA DE MADEIRA PCT C/100", qtdeAtual: 20 },
@@ -952,38 +1015,38 @@
                 document.getElementById('results').innerHTML = `
                     <div class="no-results">
                         <div style="font-size: 4em; margin-bottom: 20px;">📁</div>
-                        <h3>Instruções para GitHub Pages</h3>
-                        <div style="text-align: left; max-width: 600px; margin: 0 auto;">
-                            <p><strong>Para usar com seus dados reais, você precisa:</strong></p>
+                        <h3>Dados reais não encontrados - Usando exemplos</h3>
+                        <div style="text-align: left; max-width: 700px; margin: 0 auto;">
+                            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                                <p><strong>💡 A aplicação está funcionando com dados de exemplo!</strong></p>
+                                <p>Para usar seus dados reais do estoque de 528 itens, verifique:</p>
+                            </div>
                             <ol style="text-align: left; line-height: 1.8;">
-                                <li>Converter suas planilhas Excel para JSON ou CSV</li>
-                                <li>Salvar como <code>estoque.json</code> e <code>inventario.json</code></li>
-                                <li>Fazer upload para o seu repositório GitHub</li>
+                                <li><strong>📂 Estrutura dos arquivos:</strong>
+                                    <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 0.9em; margin: 5px 0;">
+estoque.json          ← Array com 528 produtos do estoque
+inventario.json       ← Array com produtos do inventário
+index.html            ← Esta página</pre>
+                                </li>
+                                <li><strong>🔧 Formato JSON correto:</strong> Arrays válidos no formato esperado</li>
+                                <li><strong>⏰ GitHub Pages:</strong> Pode demorar alguns minutos para atualizar após upload</li>
+                                <li><strong>🛠️ Debug:</strong> Abra F12 > Console para ver tentativas de carregamento</li>
                             </ol>
-                            <p><strong>Formato JSON esperado:</strong></p>
-                            <pre style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: left; font-size: 0.9em;">
-// estoque.json
-[
-  {
-    "codigo": 5792,
-    "produto": "ABAIXADOR DE LINGUA...",
-    "qtdeAtual": 20
-  }
-]
 
-// inventario.json  
-[
-  {
-    "cd_produto": 25339,
-    "ds_produto": "BOCAL P/ ENDOSCOPIA...",
-    "unidade": "UNIDADE",
-    "ds_classe": "MATERIAL MEDICO...",
-    "ds_sub_cla": "SONDAS, CANULAS..."
-  }
-]</pre>
-                            <p><strong>Por enquanto, usando dados de exemplo para demonstração.</strong></p>
+                            <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                                <p><strong>✅ Funcionalidades ativas:</strong></p>
+                                <ul style="text-align: left; margin: 0;">
+                                    <li>Busca inteligente em 6 níveis</li>
+                                    <li>Múltiplas correspondências por produto</li>
+                                    <li>Sistema de cópia fácil para Excel</li>
+                                    <li>Interface responsiva e intuitiva</li>
+                                </ul>
+                            </div>
                         </div>
-                        <button class="btn" onclick="window.location.reload()">🔄 Recarregar</button>
+                        <div style="margin-top: 20px;">
+                            <button class="btn" onclick="loadData()" style="margin-right: 10px;">🔄 Tentar Carregar Dados Reais</button>
+                            <button class="btn" onclick="processAll()" style="background: #28a745;">▶️ Testar com Exemplos</button>
+                        </div>
                     </div>
                 `;
             }
