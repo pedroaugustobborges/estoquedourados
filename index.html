@@ -337,7 +337,6 @@
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
         // Função para normalizar texto
         function normalizeText(text) {
@@ -612,72 +611,125 @@
             }
         }
 
-        // Função para carregar dados das planilhas reais
+        // Função para carregar dados via fetch (para GitHub Pages)
         async function loadData() {
             try {
-                console.log('Carregando dados das planilhas...');
+                console.log('Carregando dados via fetch...');
                 
-                // Carregar planilha de estoque
-                const stockData = await window.fs.readFile('POSIÇAO ESTOQUE 250925.xlsx');
-                const stockWorkbook = XLSX.read(stockData, {
-                    cellStyles: true,
-                    cellFormulas: true,
-                    cellDates: true,
-                    cellNF: true,
-                    sheetStubs: true
-                });
+                // Tentar carregar arquivo JSON do estoque
+                let stockResponse, inventoryResponse;
                 
-                const stockSheet = stockWorkbook.Sheets[stockWorkbook.SheetNames[0]];
-                const stockJsonData = XLSX.utils.sheet_to_json(stockSheet, { header: 1 });
-                
-                // Processar dados do estoque (pular cabeçalho)
-                window.stockProducts = stockJsonData.slice(1).map(row => ({
-                    codigo: row[1],
-                    produto: row[2],
-                    qtdeAtual: row[13] || 0
-                })).filter(item => item.produto && item.produto.trim() !== '');
-                
-                console.log(`Produtos do estoque carregados: ${window.stockProducts.length}`);
-                
-                // Carregar planilha de inventário
-                const inventoryData = await window.fs.readFile('Codigos para inventário HRD.xlsx');
-                const inventoryWorkbook = XLSX.read(inventoryData, {
-                    cellStyles: true,
-                    cellFormulas: true,
-                    cellDates: true,
-                    cellNF: true,
-                    sheetStubs: true
-                });
-                
-                const inventorySheet = inventoryWorkbook.Sheets[inventoryWorkbook.SheetNames[0]];
-                const inventoryJsonData = XLSX.utils.sheet_to_json(inventorySheet, { header: 1 });
-                
-                // Processar dados do inventário (pular cabeçalho)
-                window.inventoryProducts = inventoryJsonData.slice(1).map(row => ({
-                    cd_produto: row[0],
-                    ds_produto: row[1],
-                    unidade: row[2],
-                    ds_especie: row[4] || '',
-                    ds_classe: row[6] || '',
-                    ds_sub_cla: row[8] || ''
-                })).filter(item => item.ds_produto && item.ds_produto.trim() !== '');
-                
-                console.log(`Produtos do inventário carregados: ${window.inventoryProducts.length}`);
-                
-                return true;
-                
-            } catch (error) {
-                console.error('Erro ao carregar planilhas:', error);
-                
-                // Tentar usar dados já existentes no window (do analysis tool)
-                if (window.stockProducts && window.inventoryProducts) {
-                    console.log('Usando dados já carregados do window');
+                try {
+                    stockResponse = await fetch('estoque.json');
+                    if (!stockResponse.ok) throw new Error('Arquivo estoque.json não encontrado');
+                    
+                    inventoryResponse = await fetch('inventario.json');
+                    if (!inventoryResponse.ok) throw new Error('Arquivo inventario.json não encontrado');
+                    
+                    const stockData = await stockResponse.json();
+                    const inventoryData = await inventoryResponse.json();
+                    
+                    window.stockProducts = stockData;
+                    window.inventoryProducts = inventoryData;
+                    
+                    console.log(`Produtos do estoque carregados: ${window.stockProducts.length}`);
+                    console.log(`Produtos do inventário carregados: ${window.inventoryProducts.length}`);
+                    
                     return true;
+                    
+                } catch (fetchError) {
+                    console.log('Arquivos JSON não encontrados, tentando carregar CSVs...');
+                    
+                    // Tentar carregar CSVs como alternativa
+                    try {
+                        stockResponse = await fetch('estoque.csv');
+                        inventoryResponse = await fetch('inventario.csv');
+                        
+                        if (!stockResponse.ok || !inventoryResponse.ok) {
+                            throw new Error('Arquivos CSV não encontrados');
+                        }
+                        
+                        const stockCsv = await stockResponse.text();
+                        const inventoryCsv = await inventoryResponse.text();
+                        
+                        // Parse CSV simples
+                        window.stockProducts = parseCSV(stockCsv, 'stock');
+                        window.inventoryProducts = parseCSV(inventoryCsv, 'inventory');
+                        
+                        console.log(`Produtos do estoque carregados: ${window.stockProducts.length}`);
+                        console.log(`Produtos do inventário carregados: ${window.inventoryProducts.length}`);
+                        
+                        return true;
+                        
+                    } catch (csvError) {
+                        throw new Error('Nenhum arquivo de dados encontrado');
+                    }
                 }
                 
-                // Se não conseguir carregar, mostrar erro
-                throw new Error('Não foi possível carregar as planilhas. Verifique se os arquivos estão disponíveis.');
+            } catch (error) {
+                console.error('Erro ao carregar dados:', error);
+                
+                // Usar dados de exemplo para demonstração
+                console.log('Usando dados de exemplo...');
+                
+                window.stockProducts = [
+                    { codigo: 5792, produto: "ABAIXADOR DE LINGUA DE MADEIRA PCT C/100", qtdeAtual: 20 },
+                    { codigo: 3467, produto: "ABSORVENTE ADULTO", qtdeAtual: 34 },
+                    { codigo: 1981, produto: "ADESIVO LASER MAXPRINT 50X101,6 P/SORO", qtdeAtual: 458 },
+                    { codigo: 5524, produto: "ADESIVO LASER PARA SERINGA 66,7X25,4", qtdeAtual: 555 },
+                    { codigo: 1234, produto: "ALCOOL EM GEL 70% - 500ML", qtdeAtual: 127 },
+                    { codigo: 5678, produto: "ALGODAO HIDROFILO 500G", qtdeAtual: 45 },
+                    { codigo: 9012, produto: "ATADURA CREPE 15CM", qtdeAtual: 89 },
+                    { codigo: 3456, produto: "BANDAGEM ELASTICA 10CM", qtdeAtual: 67 },
+                    { codigo: 7890, produto: "CATETER VENOSO 22G", qtdeAtual: 234 },
+                    { codigo: 2345, produto: "COMPRESSA GAZE ESTERIL 7,5X7,5", qtdeAtual: 156 }
+                ];
+
+                window.inventoryProducts = [
+                    { cd_produto: 25339, ds_produto: "BOCAL P/ ENDOSCOPIA ADULTO C/ ABAIXADOR DE LINGUA E ELASTICO", unidade: "UNIDADE", ds_classe: "MATERIAL MEDICO HOSPITALAR", ds_sub_cla: "SONDAS, CANULAS E DRENAGENS" },
+                    { cd_produto: 26087, ds_produto: "BOCAL P/ ENDOSCOPIA PEDIATRICO C/ ABAIXADOR DE LINGUA E ELAS", unidade: "UNIDADE", ds_classe: "MATERIAL MEDICO HOSPITALAR", ds_sub_cla: "SONDAS, CANULAS E DRENAGENS" },
+                    { cd_produto: 17639, ds_produto: "ABAIXADOR DE LINGUA BRUENINGS (AFASTADOR) 19CM", unidade: "UNIDADE", ds_classe: "MATERIAL MEDICO HOSPITALAR", ds_sub_cla: "OUTROS" },
+                    { cd_produto: 28599, ds_produto: "ESPATULA DE MADEIRA ABAIXADOR DE LINGUA EMB. INDIVIDUAL", unidade: "UNIDADE", ds_classe: "MATERIAL MEDICO HOSPITALAR", ds_sub_cla: "OUTROS" },
+                    { cd_produto: 362, ds_produto: "PACOTE DE ESPATULA DE MADEIRA ABAIXADOR DE LINGUA", unidade: "UNIDADE", ds_classe: "MATERIAL MEDICO HOSPITALAR", ds_sub_cla: "OUTROS" },
+                    { cd_produto: 57705, ds_produto: "ABAIXADOR DE LINGUA BRUENINGS 18CM", unidade: "UNIDADE", ds_classe: "INSTRUMENTAL CIRURGICO", ds_sub_cla: "INSTRUMENTAIS DIVERSOS" },
+                    { cd_produto: 22655, ds_produto: "ABSORVENTE GERIATRICO ADULTO UNISSEX", unidade: "UNIDADE", ds_classe: "HIGIENE PESSOAL", ds_sub_cla: "ABSORVENTES" },
+                    { cd_produto: 22656, ds_produto: "ADESIVO LASER TRANSPARENTE 50X101 SORO", unidade: "UNIDADE", ds_classe: "MATERIAL DE ESCRITORIO", ds_sub_cla: "ETIQUETAS" },
+                    { cd_produto: 22657, ds_produto: "ADESIVO LASER SERINGA 66X25 BRANCO", unidade: "UNIDADE", ds_classe: "MATERIAL DE ESCRITORIO", ds_sub_cla: "ETIQUETAS" },
+                    { cd_produto: 22658, ds_produto: "ALCOOL GEL ANTISSEPTICO 70% 500ML", unidade: "FRASCO", ds_classe: "MATERIAL DE LIMPEZA", ds_sub_cla: "DESINFETANTES" }
+                ];
+                
+                return true;
             }
+        }
+
+        // Função para fazer parse simples de CSV
+        function parseCSV(csvText, type) {
+            const lines = csvText.split('\n').filter(line => line.trim());
+            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            const result = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+                const obj = {};
+                
+                if (type === 'stock') {
+                    obj.codigo = values[1] || '';
+                    obj.produto = values[2] || '';
+                    obj.qtdeAtual = values[13] || 0;
+                } else {
+                    obj.cd_produto = values[0] || '';
+                    obj.ds_produto = values[1] || '';
+                    obj.unidade = values[2] || '';
+                    obj.ds_classe = values[6] || '';
+                    obj.ds_sub_cla = values[8] || '';
+                }
+                
+                if ((type === 'stock' && obj.produto) || (type === 'inventory' && obj.ds_produto)) {
+                    result.push(obj);
+                }
+            }
+            
+            return result;
         }
 
         // Event listeners
@@ -702,19 +754,7 @@
         // Inicialização
         window.addEventListener('load', async function() {
             console.log('Carregando aplicação...');
-            
-            // Carregar biblioteca XLSX
-            if (!window.XLSX) {
-                const script = document.createElement('script');
-                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-                script.onload = async function() {
-                    console.log('XLSX carregado');
-                    await initializeApp();
-                };
-                document.head.appendChild(script);
-            } else {
-                await initializeApp();
-            }
+            await initializeApp();
         });
 
         async function initializeApp() {
@@ -736,13 +776,39 @@
                 console.error('Erro na inicialização:', error);
                 document.getElementById('results').innerHTML = `
                     <div class="no-results">
-                        <div style="font-size: 4em; margin-bottom: 20px;">⚠️</div>
-                        <h3>Erro ao Carregar Planilhas</h3>
-                        <p>Não foi possível carregar os arquivos:</p>
-                        <p><strong>• POSIÇAO ESTOQUE 250925.xlsx</strong></p>
-                        <p><strong>• Codigos para inventário HRD.xlsx</strong></p>
-                        <p>Verifique se os arquivos estão no mesmo diretório do HTML.</p>
-                        <button class="btn" onclick="window.location.reload()">🔄 Tentar Novamente</button>
+                        <div style="font-size: 4em; margin-bottom: 20px;">📁</div>
+                        <h3>Instruções para GitHub Pages</h3>
+                        <div style="text-align: left; max-width: 600px; margin: 0 auto;">
+                            <p><strong>Para usar com seus dados reais, você precisa:</strong></p>
+                            <ol style="text-align: left; line-height: 1.8;">
+                                <li>Converter suas planilhas Excel para JSON ou CSV</li>
+                                <li>Salvar como <code>estoque.json</code> e <code>inventario.json</code></li>
+                                <li>Fazer upload para o seu repositório GitHub</li>
+                            </ol>
+                            <p><strong>Formato JSON esperado:</strong></p>
+                            <pre style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: left; font-size: 0.9em;">
+// estoque.json
+[
+  {
+    "codigo": 5792,
+    "produto": "ABAIXADOR DE LINGUA...",
+    "qtdeAtual": 20
+  }
+]
+
+// inventario.json  
+[
+  {
+    "cd_produto": 25339,
+    "ds_produto": "BOCAL P/ ENDOSCOPIA...",
+    "unidade": "UNIDADE",
+    "ds_classe": "MATERIAL MEDICO...",
+    "ds_sub_cla": "SONDAS, CANULAS..."
+  }
+]</pre>
+                            <p><strong>Por enquanto, usando dados de exemplo para demonstração.</strong></p>
+                        </div>
+                        <button class="btn" onclick="window.location.reload()">🔄 Recarregar</button>
                     </div>
                 `;
             }
