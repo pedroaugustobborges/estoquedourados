@@ -430,9 +430,9 @@
             
             <div class="threshold-control tooltip">
                 <label>Similaridade mín.:</label>
-                <input type="range" id="thresholdSlider" min="5" max="80" value="50" />
-                <span id="thresholdValue">50%</span>
-                <span class="tooltiptext">Ajuste o nível mínimo de similaridade para as correspondências (valores menores mostram mais opções)</span>
+                <input type="range" id="thresholdSlider" min="10" max="95" value="60" />
+                <span id="thresholdValue">60%</span>
+                <span class="tooltiptext">Ajuste o nível mínimo de similaridade para as correspondências (60%+ mostra apenas matches relevantes)</span>
             </div>
 
             <div class="threshold-control">
@@ -500,7 +500,7 @@
         }
 
         // Função super flexível para garantir matches para TODOS os produtos
-        function findMatches(stockProduct, inventoryProducts, threshold = 10) {
+        function findMatches(stockProduct, inventoryProducts, threshold = 60) {
             const matches = [];
             const stockWords = normalizeText(stockProduct.produto).split(' ').filter(w => w.length > 1);
             const stockText = normalizeText(stockProduct.produto);
@@ -591,20 +591,32 @@
                 similarity += keywordBonus;
                 similarity = Math.min(similarity, 100);
 
-                // CRITÉRIO MUITO FLEXÍVEL: Aceitar se tem qualquer correspondência
-                if (similarity >= Math.max(threshold, 5) || keywordMatches >= 1) {
-                    matches.push({
-                        ...invProduct,
-                        similarity: Math.max(Math.round(similarity * 10) / 10, 5), // Mínimo 5% para exibir
-                        keywordMatches,
-                        matchTypes: [...new Set(matchTypes)] // Remove duplicatas
-                    });
+                // CRITÉRIO MAIS SELETIVO: Para threshold >= 60%, ser mais rigoroso
+                if (threshold >= 60) {
+                    // Para 60%+, aceitar apenas se a similaridade real for >= threshold OU tiver muitas palavras em comum
+                    if (similarity >= threshold || (keywordMatches >= 3 && similarity >= 40)) {
+                        matches.push({
+                            ...invProduct,
+                            similarity: Math.round(similarity * 10) / 10,
+                            keywordMatches,
+                            matchTypes: [...new Set(matchTypes)]
+                        });
+                    }
+                } else {
+                    // Para threshold < 60%, critério mais flexível (comportamento original)
+                    if (similarity >= Math.max(threshold, 5) || keywordMatches >= 1) {
+                        matches.push({
+                            ...invProduct,
+                            similarity: Math.max(Math.round(similarity * 10) / 10, 5),
+                            keywordMatches,
+                            matchTypes: [...new Set(matchTypes)]
+                        });
+                    }
                 }
             }
 
-            // Se não encontrou NADA, forçar pelo menos uma correspondência genérica
-            if (matches.length === 0 && inventoryProducts.length > 0) {
-                // Pegar o primeiro produto como correspondência forçada
+            // Se não encontrou NADA e threshold é baixo, forçar correspondência genérica
+            if (matches.length === 0 && threshold < 40 && inventoryProducts.length > 0) {
                 matches.push({
                     ...inventoryProducts[0],
                     similarity: 5,
@@ -743,11 +755,28 @@
             const resultsDiv = document.getElementById('results');
 
             if (matches.length === 0) {
+                const currentThreshold = parseInt(document.getElementById('thresholdSlider').value);
                 resultsDiv.innerHTML = `
                     <div class="no-results">
-                        <div style="font-size: 4em; margin-bottom: 20px;">🔍</div>
-                        <h3>Nenhuma correspondência encontrada</h3>
-                        <p>Tente reduzir o nível de similaridade mínima ou busque por produtos específicos</p>
+                        <div style="font-size: 4em; margin-bottom: 20px;">🎯</div>
+                        <h3>Nenhum match de ${currentThreshold}%+ encontrado</h3>
+                        <div style="text-align: left; max-width: 600px; margin: 0 auto;">
+                            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                                <p><strong>💡 Dica:</strong> Com 60%+ de similaridade, apenas correspondências muito relevantes são exibidas.</p>
+                            </div>
+                            <p><strong>Para ver mais resultados:</strong></p>
+                            <ul style="text-align: left; line-height: 1.6;">
+                                <li>🔽 Reduza a similaridade mínima para 40-50%</li>
+                                <li>🔍 Use termos de busca mais específicos</li>
+                                <li>📝 Verifique se o nome do produto está correto</li>
+                                <li>⚡ Teste com apenas uma palavra-chave principal</li>
+                            </ul>
+                        </div>
+                        <div style="margin-top: 20px;">
+                            <button class="btn" onclick="document.getElementById('thresholdSlider').value=40; document.getElementById('thresholdValue').textContent='40%'; processAll();" style="background: #ffc107; color: #000;">
+                                📉 Reduzir para 40% e Tentar Novamente
+                            </button>
+                        </div>
                     </div>
                 `;
                 return;
@@ -1261,4 +1290,3 @@ index.html            ← Esta página</pre>
     </script>
 </body>
 </html>
-
