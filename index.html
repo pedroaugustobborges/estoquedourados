@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Correspondência de Produtos</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .controls {
+            padding: 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .search-box {
+            flex: 1;
+            min-width: 300px;
+        }
+        
+        .search-box input {
+            width: 100%;
+            padding: 15px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            transition: all 0.3s;
+        }
+        
+        .search-box input:focus {
+            outline: none;
+            border-color: #4facfe;
+            box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
+        }
+        
+        .threshold-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .threshold-control input[type="range"] {
+            width: 150px;
+        }
+        
+        .btn {
+            padding: 12px 25px;
+            background: #4facfe;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        .btn:hover {
+            background: #3d8bfe;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.3);
+        }
+        
+        .results {
+            padding: 30px;
+        }
+        
+        .product-match {
+            margin-bottom: 30px;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+        
+        .product-match:hover {
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        
+        .stock-product {
+            background: #f8f9fa;
+            padding: 20px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .stock-product h3 {
+            margin: 0 0 10px 0;
+            color: #495057;
+            font-size: 1.2em;
+        }
+        
+        .stock-info {
+            display: flex;
+            gap: 20px;
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+        
+        .matches {
+            padding: 0;
+        }
+        
+        .match-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #f1f3f4;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .match-item:hover {
+            background: #f8f9fa;
+        }
+        
+        .match-item:last-child {
+            border-bottom: none;
+        }
+        
+        .match-info {
+            flex: 1;
+        }
+        
+        .match-name {
+            font-weight: 500;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+        
+        .match-details {
+            font-size: 0.85em;
+            color: #6c757d;
+        }
+        
+        .similarity-badge {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9em;
+            margin-left: 15px;
+        }
+        
+        .similarity-high {
+            background: linear-gradient(135deg, #28a745, #20c997);
+        }
+        
+        .similarity-medium {
+            background: linear-gradient(135deg, #ffc107, #fd7e14);
+        }
+        
+        .similarity-low {
+            background: linear-gradient(135deg, #6c757d, #495057);
+        }
+        
+        .copy-btn {
+            background: #17a2b8;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8em;
+            margin-left: 10px;
+            transition: all 0.2s;
+        }
+        
+        .copy-btn:hover {
+            background: #138496;
+            transform: scale(1.05);
+        }
+        
+        .no-results {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+        
+        .no-results i {
+            font-size: 4em;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+        
+        .stats {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+        }
+        
+        .stat-item h4 {
+            margin: 0;
+            font-size: 1.5em;
+            color: #1976d2;
+        }
+        
+        .stat-item p {
+            margin: 5px 0 0 0;
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 8px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.8em;
+        }
+        
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .search-box {
+                min-width: auto;
+            }
+            
+            .stock-info {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .match-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            
+            .stats {
+                flex-direction: column;
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Correspondência de Produtos</h1>
+            <p>Encontre produtos similares entre Estoque e Inventário</p>
+        </div>
+        
+        <div class="controls">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="🔍 Buscar produto no estoque..." />
+            </div>
+            
+            <div class="threshold-control tooltip">
+                <label>Similaridade mín.:</label>
+                <input type="range" id="thresholdSlider" min="10" max="80" value="20" />
+                <span id="thresholdValue">20%</span>
+                <span class="tooltiptext">Ajuste o nível mínimo de similaridade para as correspondências (valores menores mostram mais opções)</span>
+            </div>
+            
+            <button class="btn" onclick="processAll()">🔄 Processar Todos</button>
+        </div>
+        
+        <div class="results" id="results">
+            <div class="loading">
+                <h3>⚡ Carregando dados...</h3>
+                <p>Preparando correspondências entre os produtos</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script>
+        // Função para normalizar texto
+        function normalizeText(text) {
+            if (!text) return '';
+            return text.toString()
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9\s]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        // Função para calcular similaridade
+        function calculateSimilarity(text1, text2) {
+            const words1 = normalizeText(text1).split(' ').filter(w => w.length > 2);
+            const words2 = normalizeText(text2).split(' ').filter(w => w.length > 2);
+            
+            if (words1.length === 0 || words2.length === 0) return 0;
+            
+            let commonWords = 0;
+            let totalWords = Math.max(words1.length, words2.length);
+            
+            for (const word1 of words1) {
+                for (const word2 of words2) {
+                    if (word1 === word2 || 
+                        (word1.length > 3 && word2.length > 3 && 
+                         (word1.includes(word2) || word2.includes(word1)))) {
+                        commonWords++;
+                        break;
+                    }
+                }
+            }
+            
+            return (commonWords / totalWords) * 100;
+        }
+
+        // Função melhorada para encontrar correspondências
+        function findMatches(stockProduct, inventoryProducts, threshold = 20) {
+            const matches = [];
+            const stockWords = normalizeText(stockProduct.produto).split(' ').filter(w => w.length > 2);
+            
+            for (const invProduct of inventoryProducts) {
+                const invWords = normalizeText(invProduct.ds_produto).split(' ').filter(w => w.length > 2);
+                
+                // Calcular similaridade básica
+                let similarity = calculateSimilarity(stockProduct.produto, invProduct.ds_produto);
+                
+                // Bonus para palavras-chave importantes encontradas
+                let keywordBonus = 0;
+                for (const stockWord of stockWords) {
+                    for (const invWord of invWords) {
+                        if (stockWord === invWord && stockWord.length > 3) {
+                            keywordBonus += 15; // Bonus significativo para palavras exatas
+                        } else if (stockWord.length > 3 && invWord.length > 3) {
+                            if (stockWord.includes(invWord) || invWord.includes(stockWord)) {
+                                keywordBonus += 8; // Bonus menor para palavras similares
+                            }
+                        }
+                    }
+                }
+                
+                similarity += keywordBonus;
+                similarity = Math.min(similarity, 100); // Limitar a 100%
+                
+                if (similarity >= threshold) {
+                    matches.push({
+                        ...invProduct,
+                        similarity: Math.round(similarity * 10) / 10
+                    });
+                }
+            }
+            
+            // Retornar todas as correspondências (sem limite de 5)
+            return matches.sort((a, b) => b.similarity - a.similarity);
+        }
+
+        // Função para copiar texto para área de transferência
+        async function copyToClipboard(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                return true;
+            } catch (err) {
+                // Fallback para navegadores mais antigos
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                return true;
+            }
+        }
+
+        // Função para criar o HTML de uma correspondência (atualizada para mostrar mais informações)
+        function createMatchHTML(stockProduct, matches) {
+            const matchItems = matches.map(match => {
+                let badgeClass = 'similarity-low';
+                if (match.similarity >= 60) badgeClass = 'similarity-high';
+                else if (match.similarity >= 40) badgeClass = 'similarity-medium';
+                
+                return `
+                    <div class="match-item" onclick="copyProductInfo(${match.cd_produto}, '${match.ds_produto.replace(/'/g, "\\'")}')">
+                        <div class="match-info">
+                            <div class="match-name">${match.ds_produto}</div>
+                            <div class="match-details">
+                                <strong>Código:</strong> ${match.cd_produto} • 
+                                <strong>Unidade:</strong> ${match.unidade || 'N/A'} • 
+                                <strong>Categoria:</strong> ${match.ds_classe || 'N/A'}
+                                ${match.ds_sub_cla ? ` • <strong>Subcategoria:</strong> ${match.ds_sub_cla}` : ''}
+                            </div>
+                        </div>
+                        <div class="similarity-badge ${badgeClass}">${match.similarity}%</div>
+                        <button class="copy-btn" onclick="event.stopPropagation(); copyProductInfo(${match.cd_produto}, '${match.ds_produto.replace(/'/g, "\\'")}')">
+                            📋 Copiar
+                        </button>
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="product-match">
+                    <div class="stock-product">
+                        <h3>${stockProduct.produto}</h3>
+                        <div class="stock-info">
+                            <span><strong>Código:</strong> ${stockProduct.codigo}</span>
+                            <span><strong>Quantidade Atual:</strong> ${stockProduct.qtdeAtual || 'N/A'}</span>
+                            <span><strong>Correspondências Encontradas:</strong> ${matches.length}</span>
+                        </div>
+                    </div>
+                    <div class="matches">
+                        ${matchItems}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Função para copiar informações do produto
+        async function copyProductInfo(codigo, nome) {
+            const text = `Código: ${codigo}\nProduto: ${nome}`;
+            const success = await copyToClipboard(text);
+            
+            if (success) {
+                // Feedback visual
+                const btn = event.target.closest('.copy-btn') || event.target.closest('.match-item').querySelector('.copy-btn');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '✅ Copiado!';
+                btn.style.background = '#28a745';
+                
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.style.background = '#17a2b8';
+                }, 1500);
+            }
+        }
+
+        // Função para renderizar resultados
+        function renderResults(matches, totalStock, totalWithMatches) {
+            const resultsDiv = document.getElementById('results');
+            
+            if (matches.length === 0) {
+                resultsDiv.innerHTML = `
+                    <div class="no-results">
+                        <div style="font-size: 4em; margin-bottom: 20px;">🔍</div>
+                        <h3>Nenhuma correspondência encontrada</h3>
+                        <p>Tente reduzir o nível de similaridade mínima ou busque por produtos específicos</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const statsHTML = `
+                <div class="stats">
+                    <div class="stat-item">
+                        <h4>${totalStock}</h4>
+                        <p>Produtos no Estoque</p>
+                    </div>
+                    <div class="stat-item">
+                        <h4>${totalWithMatches}</h4>
+                        <p>Com Correspondências</p>
+                    </div>
+                    <div class="stat-item">
+                        <h4>${matches.reduce((acc, m) => acc + m.matches.length, 0)}</h4>
+                        <p>Total de Correspondências</p>
+                    </div>
+                    <div class="stat-item">
+                        <h4>${Math.round((totalWithMatches / totalStock) * 100)}%</h4>
+                        <p>Taxa de Correspondência</p>
+                    </div>
+                </div>
+            `;
+
+            const matchesHTML = matches.map(match => 
+                createMatchHTML(match.stockProduct, match.matches)
+            ).join('');
+
+            resultsDiv.innerHTML = statsHTML + matchesHTML;
+        }
+
+        // Função para processar todos os produtos
+        async function processAll() {
+            const resultsDiv = document.getElementById('results');
+            const threshold = parseInt(document.getElementById('thresholdSlider').value);
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            
+            resultsDiv.innerHTML = `
+                <div class="loading">
+                    <h3>⚙️ Processando correspondências...</h3>
+                    <p>Analisando ${window.stockProducts ? window.stockProducts.length : 0} produtos do estoque</p>
+                </div>
+            `;
+
+            // Aguardar um frame para mostrar o loading
+            await new Promise(resolve => requestAnimationFrame(resolve));
+
+            try {
+                // Verificar se os dados estão disponíveis
+                if (!window.stockProducts || !window.inventoryProducts) {
+                    // Tentar carregar os dados das planilhas
+                    await loadData();
+                }
+
+                let stockProducts = window.stockProducts || [];
+                const inventoryProducts = window.inventoryProducts || [];
+
+                // Filtrar produtos do estoque baseado na busca
+                if (searchTerm) {
+                    stockProducts = stockProducts.filter(product => 
+                        normalizeText(product.produto).includes(normalizeText(searchTerm))
+                    );
+                }
+
+                const allMatches = [];
+                let processed = 0;
+
+                for (const stockProduct of stockProducts) {
+                    const matches = findMatches(stockProduct, inventoryProducts, threshold);
+                    
+                    if (matches.length > 0) {
+                        allMatches.push({
+                            stockProduct,
+                            matches
+                        });
+                    }
+
+                    processed++;
+                    
+                    // Atualizar progresso a cada 50 produtos
+                    if (processed % 50 === 0) {
+                        resultsDiv.innerHTML = `
+                            <div class="loading">
+                                <h3>⚙️ Processando correspondências...</h3>
+                                <p>Processados ${processed} de ${stockProducts.length} produtos</p>
+                            </div>
+                        `;
+                        await new Promise(resolve => requestAnimationFrame(resolve));
+                    }
+                }
+
+                renderResults(allMatches, stockProducts.length, allMatches.length);
+
+            } catch (error) {
+                console.error('Erro ao processar:', error);
+                resultsDiv.innerHTML = `
+                    <div class="no-results">
+                        <div style="font-size: 4em; margin-bottom: 20px;">⚠️</div>
+                        <h3>Erro ao carregar dados</h3>
+                        <p>Não foi possível carregar as planilhas. Verifique se os arquivos estão disponíveis.</p>
+                        <button class="btn" onclick="loadData()">🔄 Tentar novamente</button>
+                    </div>
+                `;
+            }
+        }
+
+        // Função para carregar dados das planilhas reais
+        async function loadData() {
+            try {
+                console.log('Carregando dados das planilhas...');
+                
+                // Carregar planilha de estoque
+                const stockData = await window.fs.readFile('POSIÇAO ESTOQUE 250925.xlsx');
+                const stockWorkbook = XLSX.read(stockData, {
+                    cellStyles: true,
+                    cellFormulas: true,
+                    cellDates: true,
+                    cellNF: true,
+                    sheetStubs: true
+                });
+                
+                const stockSheet = stockWorkbook.Sheets[stockWorkbook.SheetNames[0]];
+                const stockJsonData = XLSX.utils.sheet_to_json(stockSheet, { header: 1 });
+                
+                // Processar dados do estoque (pular cabeçalho)
+                window.stockProducts = stockJsonData.slice(1).map(row => ({
+                    codigo: row[1],
+                    produto: row[2],
+                    qtdeAtual: row[13] || 0
+                })).filter(item => item.produto && item.produto.trim() !== '');
+                
+                console.log(`Produtos do estoque carregados: ${window.stockProducts.length}`);
+                
+                // Carregar planilha de inventário
+                const inventoryData = await window.fs.readFile('Codigos para inventário HRD.xlsx');
+                const inventoryWorkbook = XLSX.read(inventoryData, {
+                    cellStyles: true,
+                    cellFormulas: true,
+                    cellDates: true,
+                    cellNF: true,
+                    sheetStubs: true
+                });
+                
+                const inventorySheet = inventoryWorkbook.Sheets[inventoryWorkbook.SheetNames[0]];
+                const inventoryJsonData = XLSX.utils.sheet_to_json(inventorySheet, { header: 1 });
+                
+                // Processar dados do inventário (pular cabeçalho)
+                window.inventoryProducts = inventoryJsonData.slice(1).map(row => ({
+                    cd_produto: row[0],
+                    ds_produto: row[1],
+                    unidade: row[2],
+                    ds_especie: row[4] || '',
+                    ds_classe: row[6] || '',
+                    ds_sub_cla: row[8] || ''
+                })).filter(item => item.ds_produto && item.ds_produto.trim() !== '');
+                
+                console.log(`Produtos do inventário carregados: ${window.inventoryProducts.length}`);
+                
+                return true;
+                
+            } catch (error) {
+                console.error('Erro ao carregar planilhas:', error);
+                
+                // Tentar usar dados já existentes no window (do analysis tool)
+                if (window.stockProducts && window.inventoryProducts) {
+                    console.log('Usando dados já carregados do window');
+                    return true;
+                }
+                
+                // Se não conseguir carregar, mostrar erro
+                throw new Error('Não foi possível carregar as planilhas. Verifique se os arquivos estão disponíveis.');
+            }
+        }
+
+        // Event listeners
+        document.getElementById('searchInput').addEventListener('input', function() {
+            // Auto-processar após 1 segundo de inatividade
+            clearTimeout(this.searchTimeout);
+            this.searchTimeout = setTimeout(() => {
+                if (this.value.length >= 3 || this.value.length === 0) {
+                    processAll();
+                }
+            }, 1000);
+        });
+
+        document.getElementById('thresholdSlider').addEventListener('input', function() {
+            document.getElementById('thresholdValue').textContent = this.value + '%';
+        });
+
+        document.getElementById('thresholdSlider').addEventListener('change', function() {
+            processAll();
+        });
+
+        // Inicialização
+        window.addEventListener('load', async function() {
+            console.log('Carregando aplicação...');
+            
+            // Carregar biblioteca XLSX
+            if (!window.XLSX) {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+                script.onload = async function() {
+                    console.log('XLSX carregado');
+                    await initializeApp();
+                };
+                document.head.appendChild(script);
+            } else {
+                await initializeApp();
+            }
+        });
+
+        async function initializeApp() {
+            try {
+                // Tentar carregar os dados das planilhas
+                const success = await loadData();
+                
+                if (success) {
+                    console.log('Dados carregados com sucesso');
+                    // Processar automaticamente na inicialização com threshold baixo
+                    setTimeout(() => {
+                        processAll();
+                    }, 500);
+                } else {
+                    throw new Error('Falha ao carregar dados');
+                }
+                
+            } catch (error) {
+                console.error('Erro na inicialização:', error);
+                document.getElementById('results').innerHTML = `
+                    <div class="no-results">
+                        <div style="font-size: 4em; margin-bottom: 20px;">⚠️</div>
+                        <h3>Erro ao Carregar Planilhas</h3>
+                        <p>Não foi possível carregar os arquivos:</p>
+                        <p><strong>• POSIÇAO ESTOQUE 250925.xlsx</strong></p>
+                        <p><strong>• Codigos para inventário HRD.xlsx</strong></p>
+                        <p>Verifique se os arquivos estão no mesmo diretório do HTML.</p>
+                        <button class="btn" onclick="window.location.reload()">🔄 Tentar Novamente</button>
+                    </div>
+                `;
+            }
+        }
+
+        // Função para exportar resultados (bonus)
+        function exportResults() {
+            const threshold = parseInt(document.getElementById('thresholdSlider').value);
+            const stockProducts = window.stockProducts || [];
+            const inventoryProducts = window.inventoryProducts || [];
+            
+            let csvContent = "Produto Estoque,Código Estoque,Qtd Atual,Produto Inventário,Código Inventário,Similaridade%\n";
+            
+            for (const stockProduct of stockProducts) {
+                const matches = findMatches(stockProduct, inventoryProducts, threshold);
+                
+                if (matches.length > 0) {
+                    matches.forEach(match => {
+                        csvContent += `"${stockProduct.produto}",${stockProduct.codigo},${stockProduct.qtdeAtual},"${match.ds_produto}",${match.cd_produto},${match.similarity}\n`;
+                    });
+                } else {
+                    csvContent += `"${stockProduct.produto}",${stockProduct.codigo},${stockProduct.qtdeAtual},"","",""\n`;
+                }
+            }
+            
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'correspondencias_produtos.csv';
+            link.click();
+        }
+    </script>
+</body>
+</html>
